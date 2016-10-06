@@ -92,19 +92,21 @@ func (h *HLSDownload) m3u8parser() {
 			h.mu_seg.Unlock()
 			break
 		}
+		fmt.Println("Estoy aqui - 0")
 		if h.m3u8pls.Mediaseq == h.lastMediaseq { // no ha cambiado el m3u8 aún
 			h.mu_seg.Unlock()
 			time.Sleep(time.Duration(h.m3u8pls.Targetdur/2.0) * time.Second)
 			continue
 		}
+		fmt.Println("Estoy aqui - 1")
 		h.lastMediaseq = h.m3u8pls.Mediaseq
 		h.lastTargetdur = h.m3u8pls.Targetdur
 		for k, v := range h.m3u8pls.Segment { // segmento
 			h.cola.Add(v, h.m3u8pls.Duration[k])
 		}
+		fmt.Println("Estoy aqui - 2")
 		h.mu_seg.Unlock()
 		h.cola.Print()
-		fmt.Printf("%q\n", h.m3u8pls.Segment)
 
 		time.Sleep(time.Duration(h.m3u8pls.Targetdur) * time.Second)
 	}
