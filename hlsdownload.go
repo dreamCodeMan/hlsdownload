@@ -32,7 +32,7 @@ func init() {
 	Warning = log.New(os.Stderr, "\n\n[WARNING]: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-type HLSPlay struct {
+type HLSDownload struct {
 	duration      []float64  // matrices de duracion en segundos de los segmentos play?.ts
 	downloaddir   string     // directorio RAMdisk donde se guardan los ficheros bajados del server y listos para reproducir
 	m3u8          string     // playlist HLS *.m3u8 a bajarse para playback
@@ -50,8 +50,8 @@ type HLSPlay struct {
 	mu_play       []sync.Mutex     // Mutex para la escritura/lectura de segmentos *.ts cíclicos
 }
 
-func HLSPlayer(m3u8, downloaddir string, settings map[string]string) *HLSPlay {
-	hls := &HLSPlay{}
+func HLSDownloader(m3u8, downloaddir string, settings map[string]string) *HLSDownload {
+	hls := &HLSDownload{}
 	hls.mu_seg.Lock()
 	defer hls.mu_seg.Unlock()
 	hls.downloaddir = downloaddir
@@ -73,7 +73,7 @@ func HLSPlayer(m3u8, downloaddir string, settings map[string]string) *HLSPlay {
 	return hls
 }
 
-func (h *HLSPlay) Run() error {
+func (h *HLSDownload) Run() error {
 	var err error
 
 	h.mu_seg.Lock()
@@ -93,7 +93,7 @@ func (h *HLSPlay) Run() error {
 	return err
 }
 
-func (h *HLSPlay) Stop() error {
+func (h *HLSDownload) Stop() error {
 	var err error
 
 	h.mu_seg.Lock()
