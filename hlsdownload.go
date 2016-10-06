@@ -299,6 +299,28 @@ func (h *HLSDownload) director() {
 	}
 }
 
+func (h *HLSDownload) Stop() error {
+	var err error
+
+	h.mu_seg.Lock()
+	defer h.mu_seg.Unlock()
+	if !h.running {
+		return fmt.Errorf("hlsplay: ALREADY_STOPPED_ERROR")
+	}
+	h.downloading = false
+	h.running = false
+	h.lastTargetdur = 0.0
+	h.lastMediaseq = 0
+	h.lastIndex = 0
+	h.lastPlay = 0
+	h.lastkbps = 0
+	h.cola = cola.CreateQueue(queuetimeout)
+	h.duration = make([]float64, h.numsegs)
+	fw.Close()
+	
+	return err
+}
+
 func (h *HLSDownload) Run() error {
 	var err error
 
@@ -324,24 +346,3 @@ func (h *HLSDownload) Run() error {
 	return err
 }
 
-func (h *HLSDownload) Stop() error {
-	var err error
-
-	h.mu_seg.Lock()
-	defer h.mu_seg.Unlock()
-	if !h.running {
-		return fmt.Errorf("hlsplay: ALREADY_STOPPED_ERROR")
-	}
-	h.downloading = false
-	h.running = false
-	h.lastTargetdur = 0.0
-	h.lastMediaseq = 0
-	h.lastIndex = 0
-	h.lastPlay = 0
-	h.lastkbps = 0
-	h.cola = cola.CreateQueue(queuetimeout)
-	h.duration = make([]float64, h.numsegs)
-	fw.Close()
-	
-	return err
-}
