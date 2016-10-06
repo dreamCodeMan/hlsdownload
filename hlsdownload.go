@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"syscall"
 )
 
 const (
@@ -21,8 +20,7 @@ var (
 )
 
 func init() {
-	syscall.Mkfifo(fiforoot+"fifo", 0666)
-
+	// FIFO debe existir previo al uso de este objeto en: fiforoot+"fifo" (mkfifo /var/segments/fifo)
 	var err error
 	fw, err = os.OpenFile(fiforoot+"fifo", os.O_WRONLY|os.O_TRUNC, 0666) /// |os.O_CREATE|os.O_APPEND (O_WRONLY|O_CREAT|O_TRUNC)
 	if err != nil {
