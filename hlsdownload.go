@@ -28,13 +28,6 @@ var (
 )
 
 func init() {
-	// FIFO debe existir previo al uso de este objeto en: fiforoot+"fifo" (mkfifo /var/segments/fifo)
-	var err error
-	fw, err = os.OpenFile(fiforoot+"fifo", os.O_WRONLY|os.O_TRUNC, 0666) /// |os.O_CREATE|os.O_APPEND (O_WRONLY|O_CREAT|O_TRUNC)
-	if err != nil {
-		Warning.Fatalln(err)
-	}
-
 	Warning = log.New(os.Stderr, "\n\n[WARNING]: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
@@ -92,19 +85,16 @@ func (h *HLSDownload) m3u8parser() {
 			h.mu_seg.Unlock()
 			break
 		}
-		fmt.Println("Estoy aqui - 0")
 		if h.m3u8pls.Mediaseq == h.lastMediaseq { // no ha cambiado el m3u8 aún
 			h.mu_seg.Unlock()
 			time.Sleep(time.Duration(h.m3u8pls.Targetdur/2.0) * time.Second)
 			continue
 		}
-		fmt.Println("Estoy aqui - 1")
 		h.lastMediaseq = h.m3u8pls.Mediaseq
 		h.lastTargetdur = h.m3u8pls.Targetdur
 		for k, v := range h.m3u8pls.Segment { // segmento
 			h.cola.Add(v, h.m3u8pls.Duration[k])
 		}
-		fmt.Println("Estoy aqui - 2")
 		h.mu_seg.Unlock()
 		h.cola.Print()
 
@@ -317,14 +307,19 @@ func (h *HLSDownload) Run() error {
 		h.mu_seg.Unlock()
 		return fmt.Errorf("hlsplay: ALREADY_RUNNING_ERROR")
 	}
+	// FIFO debe existir previo al uso de este objeto en: fiforoot+"fifo" (mkfifo /var/segments/fifo)
+	fw, err = os.OpenFile(fiforoot+"fifo", os.O_RDWR, os.ModeNamedPipe) /// |os.O_CREATE|os.O_APPEND (O_WRONLY|O_CREAT|O_TRUNC)
+	if err != nil {
+		Warning.Fatalln(err)
+	}
 	// borrar la base de datos de RAM y los ficheros *.ts
 	exec.Command("/bin/sh", "-c", "rm -f "+h.downloaddir+"*.ts").Run() // equivale a rm -f /var/segments/*.ts
 	h.running = true                                                   // comienza a correr
 	h.mu_seg.Unlock()
 
 	go h.m3u8parser()
-	//go h.downloader() // bajando a su bola sin parar
-//	go h.director()   // envia segmentos al secuenciador cuando s.playing && s.restamping
+	go h.downloader() // bajando a su bola sin parar
+	go h.director()   // envia segmentos al secuenciador cuando s.playing && s.restamping
 
 	return err
 }
@@ -346,6 +341,7 @@ func (h *HLSDownload) Stop() error {
 	h.lastkbps = 0
 	h.cola = cola.CreateQueue(queuetimeout)
 	h.duration = make([]float64, h.numsegs)
-
+	fw.Close()
+	
 	return err
 }
