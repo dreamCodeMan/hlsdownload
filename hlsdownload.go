@@ -23,6 +23,12 @@ var (
 func init() {
 	syscall.Mkfifo(fiforoot+"fifo", 0666)
 
+	var err error
+	fw, err = os.OpenFile(fiforoot+"fifo", os.O_WRONLY|os.O_TRUNC, 0666) /// |os.O_CREATE|os.O_APPEND (O_WRONLY|O_CREAT|O_TRUNC)
+	if err != nil {
+		Warning.Fatalln(err)
+	}
+
 	Warning = log.New(os.Stderr, "\n\n[WARNING]: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
