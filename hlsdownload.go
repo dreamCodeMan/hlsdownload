@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"sync"
+	"fmt"
+	"os/exec"
 )
 
 const (
@@ -70,3 +72,45 @@ func HLSPlayer(m3u8, downloaddir string, settings map[string]string) *HLSPlay {
 
 	return hls
 }
+
+func (h *HLSPlay) Run() error {
+	var err error
+
+	h.mu_seg.Lock()
+	if h.running { // ya esta corriendo
+		h.mu_seg.Unlock()
+		return fmt.Errorf("hlsplay: ALREADY_RUNNING_ERROR")
+	}
+	// borrar la base de datos de RAM y los ficheros *.ts
+	exec.Command("/bin/sh", "-c", "rm -f "+h.downloaddir+"*.ts").Run() // equivale a rm -f /var/segments/*.ts
+	h.running = true                                                   // comienza a correr
+	h.mu_seg.Unlock()
+
+//	go h.m3u8parser()
+//	go h.downloader() // bajando a su bola sin parar
+//	go h.director()   // envia segmentos al secuenciador cuando s.playing && s.restamping
+
+	return err
+}
+
+func (h *HLSPlay) Stop() error {
+	var err error
+
+	h.mu_seg.Lock()
+	defer h.mu_seg.Unlock()
+	if !h.running {
+		return fmt.Errorf("hlsplay: ALREADY_STOPPED_ERROR")
+	}
+	h.downloading = false
+	h.running = false
+	h.lastTargetdur = 0.0
+	h.lastMediaseq = 0
+	h.lastIndex = 0
+	h.lastPlay = 0
+	h.lastkbps = 0
+	h.cola = cola.CreateQueue(queuetimeout)
+	h.duration = make([]float64, h.numsegs)
+
+	return err
+}
+
