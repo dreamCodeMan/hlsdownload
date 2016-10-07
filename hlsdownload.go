@@ -75,11 +75,15 @@ func HLSDownloader(m3u8, downloaddir string) *HLSDownload {
 func (h *HLSDownload) m3u8parser() {
 	for {
 		h.cola.Keeping()
+		fmt.Println("Antes de parsing")
 		h.m3u8pls.Parse()  // bajamos y parseamos la url m3u8 HLS a reproducir
+		fmt.Println("Despues de parsing")
 		if !h.m3u8pls.Ok { // m3u8 no accesible o explotable
 			time.Sleep(2 * time.Second)
+			fmt.Println("No accesible")
 			continue
 		}
+		fmt.Println("Accesible")
 		h.mu_seg.Lock()
 		if !h.running {
 			h.mu_seg.Unlock()
