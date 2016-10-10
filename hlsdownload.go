@@ -34,8 +34,8 @@ func init() {
 type Status struct {
 	Running bool // proceso completo funcionando
 	Numsegs int
-	Kbps    int    // download kbps speed
-	Fails	int		// m3u8 sucesive fails
+	Kbps    int // download kbps speed
+	Fails   int // m3u8 sucesive fails
 }
 
 type HLSDownload struct {
@@ -86,19 +86,15 @@ func HLSDownloader(m3u8, downloaddir string) *HLSDownload {
 func (h *HLSDownload) m3u8parser() {
 	for {
 		h.cola.Keeping()
-		fmt.Println("Antes de parsing")
-		h.m3u8pls.Parse() // bajamos y parseamos la url m3u8 HLS a reproducir
-		fmt.Println("Despues de parsing")
+		h.m3u8pls.Parse()  // bajamos y parseamos la url m3u8 HLS a reproducir
 		if !h.m3u8pls.Ok { // m3u8 no accesible o explotable
 			h.mu_seg.Lock()
 			h.m3u8fail++
 			h.mu_seg.Unlock()
 			time.Sleep(2 * time.Second)
-			fmt.Println("No accesible")
 			continue
 		}
 		// aqui el m3u8 ha bajado correctamente
-		fmt.Println("Accesible")
 		h.mu_seg.Lock()
 		h.m3u8fail = 0
 		if !h.running {
@@ -116,7 +112,7 @@ func (h *HLSDownload) m3u8parser() {
 			h.cola.Add(v, h.m3u8pls.Duration[k])
 		}
 		h.mu_seg.Unlock()
-		h.cola.Print()
+		//h.cola.Print()
 
 		time.Sleep(time.Duration(h.m3u8pls.Targetdur) * time.Second)
 	}
@@ -309,7 +305,7 @@ func (h *HLSDownload) director() {
 		h.mu_seg.Unlock()
 
 		file := fmt.Sprintf("%splay%d.ts", h.downloaddir, indexplay)
-		fmt.Printf("[director] Play %s\n", file)
+		//fmt.Printf("[director] Play %s\n", file)
 		err := h.secuenciador(file, indexplay)
 		if err != nil { // si pasa por aqui se supone que el FIFO1 esta muerto, y reintenta hasta que reviva cada segundo
 			Warning.Println(err)
@@ -364,7 +360,7 @@ func (h *HLSDownload) Status() *Status {
 	st.Numsegs = h.numsegs
 	st.Kbps = h.lastkbps
 	st.Fails = h.m3u8fail
-	
+
 	return &st
 }
 
