@@ -1,20 +1,20 @@
 package hlsdownload
 
 import (
+	"bufio"
+	"fmt"
 	"github.com/isaacml/cmdline"
 	"github.com/todostreaming/cola"
 	"github.com/todostreaming/m3u8pls"
-	"strings"
+	"io"
 	"log"
 	"os"
-	"sync"
-	"fmt"
 	"os/exec"
-	"time"
-	"bufio"
 	"runtime"
+	"strings"
+	"sync"
 	"syscall"
-	"io"
+	"time"
 )
 
 const (
@@ -31,6 +31,13 @@ func init() {
 	Warning = log.New(os.Stderr, "\n\n[WARNING]: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
+type Status struct {
+	Running bool // proceso completo funcionando
+	Numsegs int
+	Kbps    int    // download kbps speed
+	Fails	int		// m3u8 sucesive fails
+}
+
 type HLSDownload struct {
 	duration      []float64  // matrices de duracion en segundos de los segmentos play?.ts
 	downloaddir   string     // directorio RAMdisk donde se guardan los ficheros bajados del server y listos para reproducir
@@ -38,6 +45,7 @@ type HLSDownload struct {
 	downloading   bool       // esta bajando segmentos
 	running       bool       // proceso completo funcionando
 	mu_seg        sync.Mutex // Mutex para las variables internas del objeto HLSPlay
+	segnum        int        // numero del segmento actual en el orden de bajada
 	numsegs       int
 	lastTargetdur float64
 	lastMediaseq  int64
@@ -45,6 +53,7 @@ type HLSDownload struct {
 	lastPlay      int              // index del segmento que se envió al secuenciador desde el director
 	lastkbps      int              // download kbps speed
 	m3u8pls       *m3u8pls.M3U8pls // parser M3U8
+	m3u8fail      int              //numero de veces sucesivas que no se baja un m3u8 correcto
 	cola          *cola.Cola       // cola con los segments/dur para bajar
 	mu_play       []sync.Mutex     // Mutex para la escritura/lectura de segmentos *.ts cíclicos
 }
@@ -60,8 +69,10 @@ func HLSDownloader(m3u8, downloaddir string) *HLSDownload {
 	hls.lastTargetdur = 0.0
 	hls.lastMediaseq = 0
 	hls.lastIndex = 0
+	hls.segnum = 0
 	hls.lastPlay = 0
 	hls.lastkbps = 0
+	hls.m3u8fail = 0
 	hls.m3u8pls = m3u8pls.M3U8playlist(hls.m3u8)
 	hls.cola = cola.CreateQueue(queuetimeout)
 	// calculamos los segmentos máximos que caben
@@ -76,15 +87,20 @@ func (h *HLSDownload) m3u8parser() {
 	for {
 		h.cola.Keeping()
 		fmt.Println("Antes de parsing")
-		h.m3u8pls.Parse()  // bajamos y parseamos la url m3u8 HLS a reproducir
+		h.m3u8pls.Parse() // bajamos y parseamos la url m3u8 HLS a reproducir
 		fmt.Println("Despues de parsing")
 		if !h.m3u8pls.Ok { // m3u8 no accesible o explotable
+			h.mu_seg.Lock()
+			h.m3u8fail++
+			h.mu_seg.Unlock()
 			time.Sleep(2 * time.Second)
 			fmt.Println("No accesible")
 			continue
 		}
+		// aqui el m3u8 ha bajado correctamente
 		fmt.Println("Accesible")
 		h.mu_seg.Lock()
+		h.m3u8fail = 0
 		if !h.running {
 			h.mu_seg.Unlock()
 			break
@@ -131,8 +147,10 @@ func (h *HLSDownload) downloader() {
 			runtime.Gosched()
 			continue
 		}
+		// aqui el segmento ts ha bajado correctamente
 
 		h.mu_seg.Lock()
+		h.segnum++
 		h.lastkbps = kbps
 		h.mu_seg.Unlock()
 		if started {
@@ -170,6 +188,7 @@ func (h *HLSDownload) downloader() {
 		runtime.Gosched()
 	}
 }
+
 // baja un segmento al fichero download y lo reintenta 3 veces con un timeout 2 * segdur
 // download es la direccion absoluta del fichero donde bajarlo
 // segname es la URL completa del fichero a bajar
@@ -245,6 +264,7 @@ func download(download, segname string, segdur float64) (int, bool) {
 
 	return kbps, downloadedok
 }
+
 // esta funcion envia los ficheros a reproducir a la cola de reproducción en el FIFO1 /tmp/fifo1
 // secuencia /tmp/fifo1
 func (h *HLSDownload) secuenciador(file string, indexPlay int) error {
@@ -271,7 +291,12 @@ func (h *HLSDownload) director() {
 	for {
 		if started {
 			started = false
-			time.Sleep(12 * time.Second)
+			h.mu_seg.Lock()
+			segnum := h.segnum
+			h.mu_seg.Unlock()
+			for segnum < 3 {
+				time.Sleep(1 * time.Second)
+			}
 		}
 
 		h.mu_seg.Lock()
@@ -283,7 +308,7 @@ func (h *HLSDownload) director() {
 		h.mu_seg.Unlock()
 
 		file := fmt.Sprintf("%splay%d.ts", h.downloaddir, indexplay)
-		fmt.Printf("[director] Play %s\n",file)
+		fmt.Printf("[director] Play %s\n", file)
 		err := h.secuenciador(file, indexplay)
 		if err != nil { // si pasa por aqui se supone que el FIFO1 esta muerto, y reintenta hasta que reviva cada segundo
 			Warning.Println(err)
@@ -297,7 +322,7 @@ func (h *HLSDownload) director() {
 			h.lastPlay = 0
 		}
 		h.mu_seg.Unlock()
-		
+
 		runtime.Gosched()
 
 	}
@@ -317,12 +342,29 @@ func (h *HLSDownload) Stop() error {
 	h.lastMediaseq = 0
 	h.lastIndex = 0
 	h.lastPlay = 0
+	h.m3u8fail = 0
 	h.lastkbps = 0
+	h.segnum = 0
 	h.cola = cola.CreateQueue(queuetimeout)
 	h.duration = make([]float64, h.numsegs)
 	fw.Close()
-	
+
 	return err
+}
+
+// you dont need to call this func less than secondly
+func (h *HLSDownload) Status() *Status {
+	var st Status
+
+	h.mu_seg.Lock()
+	defer h.mu_seg.Unlock()
+
+	st.Running = h.running
+	st.Numsegs = h.numsegs
+	st.Kbps = h.lastkbps
+	st.Fails = h.m3u8fail
+	
+	return &st
 }
 
 func (h *HLSDownload) Run() error {
@@ -349,4 +391,3 @@ func (h *HLSDownload) Run() error {
 
 	return err
 }
-
