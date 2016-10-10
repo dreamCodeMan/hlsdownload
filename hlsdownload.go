@@ -291,10 +291,11 @@ func (h *HLSDownload) director() {
 	for {
 		if started {
 			started = false
-			h.mu_seg.Lock()
-			segnum := h.segnum
-			h.mu_seg.Unlock()
+			segnum := 0
 			for segnum < 3 {
+				h.mu_seg.Lock()
+				segnum = h.segnum
+				h.mu_seg.Unlock()
 				time.Sleep(1 * time.Second)
 			}
 		}
