@@ -175,7 +175,7 @@ func (h *HLSDownload) downloader() {
 			h.mu_seg.Unlock()
 
 			cp := fmt.Sprintf("cp -f %sdownload.ts %splay%d.ts", h.downloaddir, h.downloaddir, i)
-			fmt.Printf("[downloader] - 5 => %s\n",cp) ////=>
+			fmt.Printf("[downloader] - 5 => %s\n", cp) ////=>
 			h.mu_play[i].Lock()
 			exec.Command("/bin/sh", "-c", cp).Run()
 			syscall.Sync()
@@ -266,18 +266,18 @@ func download(download, segname string, segdur float64) (int, bool) {
 func (h *HLSDownload) secuenciador(file string, indexPlay int) error {
 
 	h.mu_play[indexPlay].Lock()
+	defer h.mu_play[indexPlay].Unlock()
 	fr, err := os.Open(file) // read-only
 	if err != nil {
 		Warning.Println(err)
 		return err
 	}
+	defer fr.Close()
 	if _, err := io.Copy(fw, fr); err == nil { // possible issue when fw is closed
 		////fmt.Printf("[secuenciador] (%s) Copiados %d bytes\n", file, n) // copia perfecta sin fallos
 	} else {
 		Warning.Println(err) // no salimos en caso de error de copia en algun momento
 	}
-	fr.Close()
-	h.mu_play[indexPlay].Unlock()
 
 	return err
 }
@@ -373,7 +373,7 @@ func (h *HLSDownload) Run() error {
 		return fmt.Errorf("hlsplay: ALREADY_RUNNING_ERROR")
 	}
 	// FIFO debe existir previo al uso de este objeto en: fiforoot+"fifo" (mkfifo /var/segments/fifo)
-	fw, err = os.OpenFile(fiforoot+"fifo", os.O_RDWR, os.ModeNamedPipe) /// |os.O_CREATE|os.O_APPEND (O_WRONLY|O_CREAT|O_TRUNC)
+	fw, err = os.OpenFile(fiforoot+"fifo", os.O_RDWR, os.ModeNamedPipe) // abrimos el named pipe fifo como +rw para evitar bloqueos
 	if err != nil {
 		Warning.Fatalln(err)
 	}
@@ -382,9 +382,9 @@ func (h *HLSDownload) Run() error {
 	h.running = true                                                   // comienza a correr
 	h.mu_seg.Unlock()
 
-	go h.m3u8parser()
-	go h.downloader() // bajando a su bola sin parar
-	go h.director()   // envia segmentos al secuenciador cuando s.playing && s.restamping
+	go h.m3u8parser() // baja y parsea la .m3u8 para llenar la cola de bajadas
+	go h.downloader() // bajando a su bola sin parar los segmentos .ts
+	go h.director()   // envia segmentos al secuenciador y los saca por el FIFO para remux+playback
 
 	return err
 }
