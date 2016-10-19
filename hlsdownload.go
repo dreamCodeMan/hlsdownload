@@ -36,6 +36,7 @@ type Status struct {
 	Numsegs int
 	Kbps    int // download kbps speed
 	Fails   int // m3u8 sucesive fails
+	Badfifo	bool
 }
 
 type HLSDownload struct {
@@ -49,6 +50,7 @@ type HLSDownload struct {
 	numsegs       int
 	lastTargetdur float64
 	lastMediaseq  int64
+	badfifo		bool			// bad fifo indicator
 	lastIndex     int              // index del segmento donde toca copiar download.ts  entre 0 y numsegs-1
 	lastPlay      int              // index del segmento que se envió al secuenciador desde el director
 	lastkbps      int              // download kbps speed
@@ -70,6 +72,7 @@ func HLSDownloader(m3u8, downloaddir string) *HLSDownload {
 	hls.lastMediaseq = 0
 	hls.lastIndex = 0
 	hls.segnum = 0
+	hls.badfifo = false
 	hls.lastPlay = 0
 	hls.lastkbps = 0
 	hls.m3u8fail = 0
@@ -277,6 +280,9 @@ func (h *HLSDownload) secuenciador(file string, indexPlay int) error {
 		////fmt.Printf("[secuenciador] (%s) Copiados %d bytes\n", file, n) // copia perfecta sin fallos
 	} else {
 		Warning.Println(err) // no salimos en caso de error de copia en algun momento
+		h.mu_seg.Lock()
+		h.badfifo = true
+		h.mu_seg.Unlock()
 	}
 
 	return err
@@ -342,6 +348,7 @@ func (h *HLSDownload) Stop() error {
 	h.m3u8fail = 0
 	h.lastkbps = 0
 	h.segnum = 0
+	h.badfifo = false
 	h.cola = cola.CreateQueue(queuetimeout)
 	h.duration = make([]float64, h.numsegs)
 	fw.Close()
@@ -360,6 +367,7 @@ func (h *HLSDownload) Status() *Status {
 	st.Numsegs = h.numsegs
 	st.Kbps = h.lastkbps
 	st.Fails = h.m3u8fail
+	st.Badfifo = h.badfifo	
 
 	return &st
 }
@@ -379,7 +387,8 @@ func (h *HLSDownload) Run() error {
 	}
 	// borrar la base de datos de RAM y los ficheros *.ts
 	exec.Command("/bin/sh", "-c", "rm -f "+h.downloaddir+"*.ts").Run() // equivale a rm -f /var/segments/*.ts
-	h.running = true                                                   // comienza a correr
+	h.running = true
+	h.badfifo = false                                                  // comienza a correr
 	h.mu_seg.Unlock()
 
 	go h.m3u8parser() // baja y parsea la .m3u8 para llenar la cola de bajadas
