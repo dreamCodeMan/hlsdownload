@@ -178,11 +178,12 @@ func (h *HLSDownload) downloader() {
 			h.mu_seg.Unlock()
 
 			cp := fmt.Sprintf("cp -f %sdownload.ts %splay%d.ts", h.downloaddir, h.downloaddir, i)
-			fmt.Printf("[downloader] - 5 => %s\n", cp) ////=>
+			fmt.Printf("[downloader lock %d] => %s\n", i, cp) ////=>
 			h.mu_play[i].Lock()
 			exec.Command("/bin/sh", "-c", cp).Run()
 			syscall.Sync()
 			h.mu_play[i].Unlock()
+			fmt.Printf("[downloader unlock %d] => %s\n", i, cp) ////=>
 		}
 		runtime.Gosched()
 	}
@@ -311,13 +312,14 @@ func (h *HLSDownload) director() {
 		h.mu_seg.Unlock()
 
 		file := fmt.Sprintf("%splay%d.ts", h.downloaddir, indexplay)
-		fmt.Printf("[director] Play %s\n", file) ////=>
+		fmt.Printf("[director lock %d] => Play %s\n", indexplay, file) ////=>
 		err := h.secuenciador(file, indexplay)
 		if err != nil { // si pasa por aqui se supone que el FIFO1 esta muerto, y reintenta hasta que reviva cada segundo
 			Warning.Println(err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		fmt.Printf("[director unlock %d] => Play %s\n", indexplay, file) ////=>
 
 		h.mu_seg.Lock()
 		h.lastPlay++
