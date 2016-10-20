@@ -272,8 +272,8 @@ func (h *HLSDownload) secuenciador(file string, indexPlay int) error {
 	h.mu_play[indexPlay].Lock()
 	defer h.mu_play[indexPlay].Unlock()
 
-	fmt.Println("cat "+file+" "+fiforoot+"fifo")
-	err:=exec.Command("/bin/sh","-c","cat "+file+" "+fiforoot+"fifo").Run()
+	fmt.Println("cat "+file+" > "+fiforoot+"fifo")
+	err:=exec.Command("/bin/sh","-c","cat "+file+" > "+fiforoot+"fifo").Run()
 	
 /*
 	fr, err := os.Open(file) // read-only
