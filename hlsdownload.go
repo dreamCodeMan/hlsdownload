@@ -6,7 +6,7 @@ import (
 	"github.com/isaacml/cmdline"
 	"github.com/todostreaming/cola"
 	"github.com/todostreaming/m3u8pls"
-//	"io"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -24,7 +24,7 @@ const (
 
 var (
 	Warning *log.Logger
-//	fw      *os.File //FIFO File descriptor
+	fw      *os.File //FIFO File descriptor
 )
 
 func init() {
@@ -272,10 +272,6 @@ func (h *HLSDownload) secuenciador(file string, indexPlay int) error {
 	h.mu_play[indexPlay].Lock()
 	defer h.mu_play[indexPlay].Unlock()
 
-	fmt.Println("cat "+file+" > "+fiforoot+"fifo")
-	err:=exec.Command("/bin/sh","-c","cat "+file+" > "+fiforoot+"fifo").Run()
-	
-/*
 	fr, err := os.Open(file) // read-only
 	if err != nil {
 		Warning.Println(err)
@@ -290,7 +286,6 @@ func (h *HLSDownload) secuenciador(file string, indexPlay int) error {
 		h.badfifo = true
 		h.mu_seg.Unlock()
 	}
-*/
 
 	return err
 }
@@ -359,7 +354,7 @@ func (h *HLSDownload) Stop() error {
 	h.badfifo = false
 	h.cola = cola.CreateQueue(queuetimeout)
 	h.duration = make([]float64, h.numsegs)
-//	fw.Close()
+	fw.Close()
 
 	return err
 }
@@ -389,10 +384,10 @@ func (h *HLSDownload) Run() error {
 		return fmt.Errorf("hlsplay: ALREADY_RUNNING_ERROR")
 	}
 	// FIFO debe existir previo al uso de este objeto en: fiforoot+"fifo" (mkfifo /var/segments/fifo)
-//	fw, err = os.OpenFile(fiforoot+"fifo", os.O_RDWR, os.ModeNamedPipe) // abrimos el named pipe fifo como +rw para evitar bloqueos
-//	if err != nil {
-//		Warning.Fatalln(err)
-//	}
+	fw, err = os.OpenFile(fiforoot+"fifo", os.O_RDWR, os.ModeNamedPipe) // abrimos el named pipe fifo como +rw para evitar bloqueos
+	if err != nil {
+		Warning.Fatalln(err)
+	}
 	// borrar la base de datos de RAM y los ficheros *.ts
 	exec.Command("/bin/sh", "-c", "rm -f "+h.downloaddir+"*.ts").Run() // equivale a rm -f /var/segments/*.ts
 	h.running = true
