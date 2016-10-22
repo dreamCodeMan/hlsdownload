@@ -33,7 +33,7 @@ func init() {
 
 type Status struct {
 	Running bool // proceso completo funcionando
-	Numsegs int
+	Segnum int	// numero de segmento bajado
 	Kbps    int // download kbps speed
 	Fails   int // m3u8 sucesive fails
 	Badfifo	bool
@@ -367,7 +367,7 @@ func (h *HLSDownload) Status() *Status {
 	defer h.mu_seg.Unlock()
 
 	st.Running = h.running
-	st.Numsegs = h.numsegs
+	st.Segnum = h.segnum
 	st.Kbps = h.lastkbps
 	st.Fails = h.m3u8fail
 	st.Badfifo = h.badfifo	
