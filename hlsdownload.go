@@ -37,6 +37,7 @@ type Status struct {
 	Kbps    int // download kbps speed
 	Fails   int // m3u8 sucesive fails
 	Badfifo	bool
+	Paused	bool
 }
 
 type HLSDownload struct {
@@ -45,6 +46,8 @@ type HLSDownload struct {
 	m3u8          string     // playlist HLS *.m3u8 a bajarse para playback
 	downloading   bool       // esta bajando segmentos
 	running       bool       // proceso completo funcionando
+	paused		bool		// director pausado, FIFO desbloqueado, downloader funcionando aún
+	execpause	bool		// pausa ejecutada por el director, director esperando
 	mu_seg        sync.Mutex // Mutex para las variables internas del objeto HLSPlay
 	segnum        int        // numero del segmento actual en el orden de bajada
 	numsegs       int
@@ -73,6 +76,8 @@ func HLSDownloader(m3u8, downloaddir string) *HLSDownload {
 	hls.lastIndex = 0
 	hls.segnum = 0
 	hls.badfifo = false
+	hls.paused = false
+	hls.execpause = false
 	hls.lastPlay = 0
 	hls.lastkbps = 0
 	hls.m3u8fail = 0
@@ -307,6 +312,14 @@ func (h *HLSDownload) director() {
 			h.mu_seg.Unlock()
 			break
 		}
+		
+		if h.paused {
+			h.execpause = true
+			h.mu_seg.Unlock()
+			time.Sleep(50 * time.Millisecond)
+			continue
+		} 
+		h.execpause = false
 		indexplay := h.lastPlay
 		h.mu_seg.Unlock()
 
@@ -350,6 +363,8 @@ func (h *HLSDownload) Stop() error {
 	h.lastkbps = 0
 	h.segnum = 0
 	h.badfifo = false
+	h.paused = false
+	h.execpause = false
 	h.cola = cola.CreateQueue(queuetimeout)
 	h.duration = make([]float64, h.numsegs)
 	fw.Close()
@@ -364,13 +379,36 @@ func (h *HLSDownload) Status() *Status {
 	h.mu_seg.Lock()
 	defer h.mu_seg.Unlock()
 
-	st.Running = h.running
+	st.Running = h.running	// downloader + director corriendo
 	st.Segnum = h.segnum
 	st.Kbps = h.lastkbps
 	st.Fails = h.m3u8fail
-	st.Badfifo = h.badfifo	
+	st.Badfifo = h.badfifo
+	st.Paused = h.execpause // realmente FIFO parado (downloader corriendo)	
 
 	return &st
+}
+
+// Pauses the director once it flushes all the FIFO out
+// Paused is activated once the flushes ends
+func (h *HLSDownload) Pause() {
+	h.mu_seg.Lock()
+	defer h.mu_seg.Unlock()
+
+	if h.running {
+		h.paused = true
+	}
+}
+
+// Unpauses a completed flushed out director
+// resumes the FIFO writing with the next segment in the queue
+func (h *HLSDownload) Resume() {
+	h.mu_seg.Lock()
+	defer h.mu_seg.Unlock()
+
+	if h.running && h.execpause {
+		h.paused = false
+	}
 }
 
 func (h *HLSDownload) Run() error {
@@ -389,7 +427,9 @@ func (h *HLSDownload) Run() error {
 	// borrar la base de datos de RAM y los ficheros *.ts
 	exec.Command("/bin/sh", "-c", "rm -f "+h.downloaddir+"*.ts").Run() // equivale a rm -f /var/segments/*.ts
 	h.running = true
-	h.badfifo = false                                                  // comienza a correr
+	h.badfifo = false
+	h.paused = false
+	h.execpause = false                                                  // comienza a correr
 	h.mu_seg.Unlock()
 
 	go h.m3u8parser() // baja y parsea la .m3u8 para llenar la cola de bajadas
