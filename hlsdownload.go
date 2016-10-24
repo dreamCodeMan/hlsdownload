@@ -401,12 +401,14 @@ func (h *HLSDownload) Pause() {
 }
 
 // Unpauses a completed flushed out director
+// if u pause a hlsdownload, you will not be able to resume it until it flushes completely the FIFO
+// so u will need to read the Status before using this method efficiently
 // resumes the FIFO writing with the next segment in the queue
 func (h *HLSDownload) Resume() {
 	h.mu_seg.Lock()
 	defer h.mu_seg.Unlock()
 
-	if h.running && h.execpause {
+	if h.running && h.execpause && h.paused {
 		h.paused = false
 	}
 }
