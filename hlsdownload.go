@@ -115,7 +115,7 @@ func (h *HLSDownload) m3u8parser() {
 			h.cola.Add(v, h.m3u8pls.Duration[k])
 		}
 		h.mu_seg.Unlock()
-		//h.cola.Print()
+		////h.cola.Print()
 
 		time.Sleep(time.Duration(h.m3u8pls.Targetdur) * time.Second)
 	}
@@ -130,15 +130,13 @@ func (h *HLSDownload) downloader() {
 			break
 		}
 		h.mu_seg.Unlock()
-		if h.cola.Len() < 1 {
+
+		segname, segdur, next := h.cola.Next()
+		if !next {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		segname, segdur := h.cola.Next()
-		if segname == "" && segdur == 0.0 {
-			time.Sleep(1 * time.Second)
-			continue
-		}
+
 		os.Remove(h.downloaddir + "download.ts")
 		syscall.Sync()
 		kbps, ok := download(h.downloaddir+"download.ts", segname, segdur)
