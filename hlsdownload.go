@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-//	"syscall"
 	"time"
 )
 
@@ -143,7 +142,6 @@ func (h *HLSDownload) downloader() {
 		}
 
 		os.Remove(h.downloaddir + "download.ts")
-//		syscall.Sync()
 		kbps, ok := download(h.downloaddir+"download.ts", segname, segdur)
 		if !ok {
 			runtime.Gosched()
@@ -166,7 +164,6 @@ func (h *HLSDownload) downloader() {
 				////fmt.Printf("[downloader] - 4 => %s\n",cp)
 				h.mu_play[i].Lock()
 				exec.Command("/bin/sh", "-c", cp).Run()
-//				syscall.Sync()
 				h.mu_play[i].Unlock()
 			}
 		} else {
@@ -184,7 +181,6 @@ func (h *HLSDownload) downloader() {
 			fmt.Printf("[downloader lock %d] => %s\n", i, cp) ////=>
 			h.mu_play[i].Lock()
 			exec.Command("/bin/sh", "-c", cp).Run()
-//			syscall.Sync()
 			h.mu_play[i].Unlock()
 			fmt.Printf("[downloader unlock %d] => %s\n", i, cp) ////=>
 		}
