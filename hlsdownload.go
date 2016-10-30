@@ -32,11 +32,12 @@ func init() {
 
 type Status struct {
 	Running bool // proceso completo funcionando
-	Segnum int	// numero de segmento bajado
-	Kbps    int // download kbps speed
-	Fails   int // m3u8 sucesive fails
-	Badfifo	bool
-	Paused	bool
+	Segnum  int  // numero de segmento bajado
+	Kbps    int  // download kbps speed
+	Fails   int  // m3u8 sucesive fails
+	Badfifo bool
+	Paused  bool
+	Lastime int64 // last UNIX time an m3u8 was downloaded
 }
 
 type HLSDownload struct {
@@ -45,19 +46,20 @@ type HLSDownload struct {
 	m3u8          string     // playlist HLS *.m3u8 a bajarse para playback
 	downloading   bool       // esta bajando segmentos
 	running       bool       // proceso completo funcionando
-	paused		bool		// director pausado, FIFO desbloqueado, downloader funcionando aún
-	execpause	bool		// pausa ejecutada por el director, director esperando
+	paused        bool       // director pausado, FIFO desbloqueado, downloader funcionando aún
+	execpause     bool       // pausa ejecutada por el director, director esperando
 	mu_seg        sync.Mutex // Mutex para las variables internas del objeto HLSPlay
 	segnum        int        // numero del segmento actual en el orden de bajada
 	numsegs       int
 	lastTargetdur float64
 	lastMediaseq  int64
-	badfifo		bool			// bad fifo indicator
+	badfifo       bool             // bad fifo indicator
 	lastIndex     int              // index del segmento donde toca copiar download.ts  entre 0 y numsegs-1
 	lastPlay      int              // index del segmento que se envió al secuenciador desde el director
 	lastkbps      int              // download kbps speed
 	m3u8pls       *m3u8pls.M3U8pls // parser M3U8
 	m3u8fail      int              //numero de veces sucesivas que no se baja un m3u8 correcto
+	lastm3u8      int64            // last UNIX time that an m3u8 was downloaded
 	cola          *cola.Cola       // cola con los segments/dur para bajar
 	mu_play       []sync.Mutex     // Mutex para la escritura/lectura de segmentos *.ts cíclicos
 }
@@ -103,6 +105,7 @@ func (h *HLSDownload) m3u8parser() {
 		}
 		// aqui el m3u8 ha bajado correctamente
 		h.mu_seg.Lock()
+		h.lastm3u8 = time.Now().Unix()
 		h.m3u8fail = 0
 		if !h.running {
 			h.mu_seg.Unlock()
@@ -308,13 +311,13 @@ func (h *HLSDownload) director() {
 			h.mu_seg.Unlock()
 			break
 		}
-		
+
 		if h.paused {
 			h.execpause = true
 			h.mu_seg.Unlock()
 			time.Sleep(50 * time.Millisecond)
 			continue
-		} 
+		}
 		h.execpause = false
 		indexplay := h.lastPlay
 		h.mu_seg.Unlock()
@@ -358,6 +361,7 @@ func (h *HLSDownload) Stop() error {
 	h.m3u8fail = 0
 	h.lastkbps = 0
 	h.segnum = 0
+	h.lastm3u8 = 0
 	h.badfifo = false
 	h.paused = false
 	h.execpause = false
@@ -375,12 +379,13 @@ func (h *HLSDownload) Status() *Status {
 	h.mu_seg.Lock()
 	defer h.mu_seg.Unlock()
 
-	st.Running = h.running	// downloader + director corriendo
+	st.Running = h.running // downloader + director corriendo
 	st.Segnum = h.segnum
 	st.Kbps = h.lastkbps
 	st.Fails = h.m3u8fail
 	st.Badfifo = h.badfifo
-	st.Paused = h.execpause // realmente FIFO parado (downloader corriendo)	
+	st.Paused = h.execpause // realmente FIFO parado (downloader corriendo)
+	st.Lastime = h.lastm3u8
 
 	return &st
 }
@@ -427,7 +432,8 @@ func (h *HLSDownload) Run() error {
 	h.running = true
 	h.badfifo = false
 	h.paused = false
-	h.execpause = false                                                  // comienza a correr
+	h.execpause = false // comienza a correr
+	h.lastm3u8 = 0
 	h.mu_seg.Unlock()
 
 	go h.m3u8parser() // baja y parsea la .m3u8 para llenar la cola de bajadas
