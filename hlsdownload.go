@@ -414,18 +414,18 @@ func (h *HLSDownload) Resume() {
 	}
 }
 
-// call this func after Pause()
+// call this func after Pause(), will block until FIFO is empty
 func (h *HLSDownload) WaitforPaused() error {
 	var err error
 
 	for {
 		h.mu_seg.Lock()
-		paused := h.paused
+		paused := h.execpause
 		h.mu_seg.Unlock()
 		if paused {
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		runtime.Gosched()
 	}
 
