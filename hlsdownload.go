@@ -425,6 +425,7 @@ func (h *HLSDownload) WaitforPaused() error {
 		if paused {
 			break
 		}
+		time.Sleep(100 * time.Millisecond)
 		runtime.Gosched()
 	}
 
