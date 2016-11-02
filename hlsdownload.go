@@ -202,6 +202,7 @@ func download(download, segname string, segdur float64) (int, bool) {
 	var kbps int
 	var downloading bool
 
+	finished := false
 	cmd := fmt.Sprintf("/usr/bin/wget -t 3 --limit-rate=625k -S -O %s %s", download, segname)
 	////fmt.Println(cmd)
 	exe := cmdline.Cmdline(cmd)
@@ -219,7 +220,10 @@ func download(download, segname string, segdur float64) (int, bool) {
 				////fmt.Println("[download] WGET matado supera los XXX segundos !!!!")
 				break
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(20 * time.Millisecond)
+			if finished {
+				break
+			}
 		}
 	}()
 	downloading = true
@@ -263,6 +267,8 @@ func download(download, segname string, segdur float64) (int, bool) {
 			kbps = int(filesize * 8.0 * 1e9 / ns / 1000.0)
 		}
 	}
+	finished = true
+	time.Sleep(50 * time.Millisecond)
 
 	return kbps, downloadedok
 }
