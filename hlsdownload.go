@@ -31,13 +31,14 @@ func init() {
 }
 
 type Status struct {
-	Running bool // proceso completo funcionando
-	Segnum  int  // numero de segmento bajado
-	Kbps    int  // download kbps speed
-	Fails   int  // m3u8 sucesive fails
-	Badfifo bool
-	Paused  bool
-	Lastime int64 // last UNIX time an m3u8 was downloaded
+	Running  bool // proceso completo funcionando
+	Segnum   int  // numero de segmento bajado
+	Kbps     int  // download kbps speed
+	Fails    int  // m3u8 sucesive fails
+	SegsFail int  // ts segments failed to download
+	Badfifo  bool
+	Paused   bool
+	Lastime  int64 // last UNIX time an m3u8 was downloaded
 }
 
 type HLSDownload struct {
@@ -50,6 +51,7 @@ type HLSDownload struct {
 	execpause     bool       // pausa ejecutada por el director, director esperando
 	mu_seg        sync.Mutex // Mutex para las variables internas del objeto HLSPlay
 	segnum        int        // numero del segmento actual en el orden de bajada
+	segsfail      int        // numero de segmentos TS fallados en la bajada
 	numsegs       int
 	lastTargetdur float64
 	lastMediaseq  int64
@@ -82,6 +84,7 @@ func HLSDownloader(m3u8, downloaddir string) *HLSDownload {
 	hls.lastPlay = 0
 	hls.lastkbps = 0
 	hls.m3u8fail = 0
+	hls.segsfail = 0
 	hls.m3u8pls = m3u8pls.M3U8playlist(hls.m3u8)
 	hls.cola = cola.CreateQueue(queuetimeout)
 	// calculamos los segmentos máximos que caben
@@ -147,6 +150,9 @@ func (h *HLSDownload) downloader() {
 		os.Remove(h.downloaddir + "download.ts")
 		kbps, ok := download(h.downloaddir+"download.ts", segname, segdur)
 		if !ok {
+			h.mu_seg.Lock()
+			h.segsfail++
+			h.mu_seg.Unlock()
 			runtime.Gosched()
 			continue
 		}
@@ -368,6 +374,7 @@ func (h *HLSDownload) Stop() error {
 	h.lastkbps = 0
 	h.segnum = 0
 	h.lastm3u8 = 0
+	h.segsfail = 0
 	h.badfifo = false
 	h.paused = false
 	h.execpause = false
@@ -390,6 +397,7 @@ func (h *HLSDownload) Status() *Status {
 	st.Kbps = h.lastkbps
 	st.Fails = h.m3u8fail
 	st.Badfifo = h.badfifo
+	st.SegsFail = h.segsfail
 	st.Paused = h.execpause // realmente FIFO parado (downloader corriendo)
 	st.Lastime = h.lastm3u8
 
