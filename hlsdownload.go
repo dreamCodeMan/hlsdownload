@@ -95,6 +95,13 @@ func HLSDownloader(m3u8, downloaddir string) *HLSDownload {
 	return hls
 }
 
+func (h *HLSDownload) SegFailReset() {
+	h.mu_seg.Lock()
+	defer h.mu_seg.Unlock()
+
+	h.segsfail = 0
+}
+
 func (h *HLSDownload) m3u8parser() {
 	for {
 		h.cola.Keeping()
